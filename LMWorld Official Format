@@ -1,0 +1,1315 @@
+LiMe World — Official Format Documentation
+Version 1.1
+
+Table of Contents
+Introduction
+
+File Structure
+
+The Root Object
+
+Instances — Overview
+
+Instance Classes — Overview
+
+3D Physical & Environmental Instances
+
+Networking & Backend Code Instances
+
+User Interface (UI) Instances
+
+Client-Side Code Instances
+
+Player / Character / Team Instances
+
+Items & Audio Instances
+
+Property Types
+
+Parenting & Hierarchy
+
+Naming Conventions
+
+Scripts & LMLua Integration
+
+World Metadata
+
+Lighting & Environment
+
+Camera & Spawn
+
+Physics
+
+Materials
+
+Schema Reference
+
+Reserved Field Names
+
+Differences from Roblox .rbxlx
+
+Roadmap
+
+Appendices
+
+1. Introduction
+LiMe World (.lw) is the scene description format for LiMe, a Roblox-style game engine built on top of LMLua. A .lw file describes an entire world — its instances, their properties, their hierarchy, lighting, physics, and attached scripts — using JSON.
+
+The format is intentionally:
+
+JSON-based — no custom parsers, no XML, no binary blobs
+
+Human-readable — openable in any text editor
+
+Diff-friendly — version control works naturally
+
+LMLua-aware — scripts embedded in .lw files are LMLua source
+
+Roblox-inspired — the instance tree mirrors Roblox's Instance model, but simplified and modernized
+
+1.1 File Extension
+World files use the extension .lw.
+
+1.2 MIME Type
+application/x-lime-world+json
+
+1.3 Hello, World
+The smallest valid .lw file:
+
+| {
+| | "format": "lime-world",
+| | "version": "1.1",
+| | "instances": []
+| }
+
+2. File Structure
+A .lw file is a single JSON object with the following top-level fields:
+
+Field	Type	Required	Description
+format	string	Yes	Must be "lime-world"
+version	string	Yes	Format version, e.g. "1.1"
+metadata	object	No	World metadata (name, author, etc.)
+instances	array	Yes	Instances of the world tree
+lighting	object	No	Global lighting settings
+environment	object	No	Sky, fog, atmosphere
+camera	object	No	Default camera configuration
+spawn	object	No	Default spawn point
+physics	object	No	Global physics settings
+assets	object	No	Asset registry (meshes, textures, sounds)
+All other top-level fields are ignored by the parser, which keeps the format forward-compatible.
+
+3. The Root Object
+Every .lw file begins with a root object carrying the format tag, version, optional metadata, the instances array, and any optional global sections.
+
+The format field is required and must be the literal string "lime-world". Any other value causes the loader to reject the file.
+
+The version field is required and carries a semantic version string. Version "1.1" provides:
+
+All 26 instance classes
+
+Generic properties resolved by instID
+
+Dotted-path parenting
+
+Implicit top-level containers
+
+Lighting, camera, spawn, physics, environment
+
+Inline LMLua scripts via sourceCode
+
+4. Instances — Overview
+An instance is any object in the world — a part, a model, a light, a script, a UI element, a player, a sound, or a network event.
+
+4.1 Instance Fields
+Field	Type	Required	Description
+instID	string	Yes	Instance class identifier (e.g. "Part")
+name	string	No	Instance name, defaults to instID
+parent	string	No	Parent path (e.g. "workspace")
+properties	object	No	Property map
+tags	array	No	Collection tags (strings)
+attributes	object	No	Custom user-defined attributes
+id	string	No	Unique identifier
+4.2 Minimal Instance
+| {
+| | "instID": "Part",
+| | "name": "Floor",
+| | "parent": "workspace"
+| }
+
+4.3 Full Instance
+| {
+| | "instID": "Part",
+| | "name": "Floor",
+| | "parent": "workspace",
+| | "id": "part_floor_01",
+| | "tags": ["static", "walkable"],
+| | "attributes": {
+| | | "CustomTag": "Lobby"
+| | },
+| | "properties": {
+| | | "coordinates": [0, 0, 0],
+| | | "size": [50, 1, 50],
+| | | "color": [128, 128, 128],
+| | | "surfaceMaterial": "Concrete",
+| | | "anchored": true,
+| | | "shape": "Box"
+| | }
+| }
+
+4.4 The instID Field
+instID is the authoritative class identifier. The system uses it to determine:
+
+Which properties are valid
+
+Which runtime behavior applies
+
+Which type the instance resolves to in LMLua
+
+There is no separate class field. instID is the class.
+
+4.5 The properties Object
+All visual, physical, and behavioral properties of an instance live inside properties. This keeps the top-level fields (instID, name, parent) clean and readable, and groups all mutable state in one place.
+
+Property names are generic wherever possible — the same name (color, size, text) is reused across classes, and the loader resolves meaning from instID.
+
+Example — a Part with size of vec3:
+
+| {
+| | "instID": "Part",
+| | "properties": {
+| | | "size": [50, 1, 50]
+| | }
+| }
+
+Example — a Frame with size of dims:
+
+| {
+| | "instID": "Frame",
+| | "properties": {
+| | | "size": [200, 100]
+| | }
+| }
+
+Same name, different type, resolved by class.
+
+5. Instance Classes — Overview
+LiMe World defines 26 built-in instance classes, organized into seven categories:
+
+5.1 3D Physical & Environmental (9)
+Part, SpawnLocation, Model, PointLight, RigJoint, Rig, Attachment, Camera, Folder
+
+5.2 Networking & Backend Code (3)
+RemoteEvent, BindableEvent, Script
+
+5.3 User Interface (8)
+ScreenGui, Frame, ScrollFrame, TextLabel, TextButton, ImageLabel, ImageButton, TextBox
+
+5.4 Client-Side Code (1)
+LocalScript
+
+5.5 Player / Character / Team (3)
+Player, Character, Team
+
+5.6 Items (1)
+Gear
+
+5.7 Audio (1)
+Sound
+
+6. 3D Physical & Environmental Instances
+6.1 Part
+Description: The basic 3D building block used to create floors, walls, pillars, and physical structures.
+
+Properties:
+
+Property	Type	Description
+coordinates	vec3	The 3D position of the part
+size	vec3	Width, height, and depth
+color	color	RGB color (0–255)
+surfaceMaterial	str	Visual material style (e.g. "Slate")
+anchored	boolean	Whether the part is anchored in place
+shape	str	Geometry shape: "Box", "Ball", "Cylinder", "Wedge"
+Example:
+
+| {
+| | "instID": "Part",
+| | "name": "Wall",
+| | "parent": "workspace",
+| | "properties": {
+| | | "coordinates": [10, 5, 0],
+| | | "size": [1, 10, 20],
+| | | "color": [200, 200, 200],
+| | | "surfaceMaterial": "Brick",
+| | | "anchored": true,
+| | | "shape": "Box"
+| | }
+| }
+
+6.2 SpawnLocation
+Description: A specialized part where players spawn or respawn into the game world.
+
+Properties:
+
+Property	Type	Description
+coordinates	vec3	The 3D position
+size	vec3	Dimensions
+color	color	RGB color
+anchored	boolean	Whether the spawn is anchored
+shape	str	Geometry shape
+Example:
+
+| {
+| | "instID": "SpawnLocation",
+| | "name": "RedSpawn",
+| | "parent": "workspace",
+| | "properties": {
+| | | "coordinates": [0, 5, 0],
+| | | "size": [6, 1, 6],
+| | | "color": [255, 0, 0],
+| | | "anchored": true,
+| | | "shape": "Box"
+| | }
+| }
+
+6.3 Model
+Description: A container used to group multiple 3D parts into a single organized object or collection.
+
+Properties: (none required — a Model is purely a container)
+
+Parts belonging to a model use a parent path that includes the model's name:
+
+| {
+| | "instID": "Part",
+| | "name": "Door",
+| | "parent": "workspace.House",
+| | "properties": {
+| | | "coordinates": [5, 2, 0],
+| | | "size": [1, 4, 2]
+| | }
+| }
+
+6.4 PointLight
+Description: A lighting object that casts light in all directions from a single point, with adjustable brightness, range, and color.
+
+Properties:
+
+Property	Type	Description
+brightness	int / number	How intense the light output is
+range	int / number	Maximum distance the light reaches
+color	color	RGB tint of the light
+Example:
+
+| {
+| | "instID": "PointLight",
+| | "name": "CeilingLamp",
+| | "parent": "workspace.House",
+| | "properties": {
+| | | "brightness": 5,
+| | | "range": 30,
+| | | "color": [255, 240, 200]
+| | }
+| }
+
+6.5 RigJoint
+Description: A Motor6D-style joint that connects two parts using a rotation and position transform. Used to build skeletons for characters and NPCs.
+
+Properties:
+
+Property	Type	Description
+coordinates	vec3	The joint transform (position + rotation)
+part0	str	Name or path of the first joined part
+part1	str	Name or path of the second joined part
+Example:
+
+| {
+| | "instID": "RigJoint",
+| | "name": "LeftShoulder",
+| | "parent": "workspace.NPC",
+| | "properties": {
+| | | "coordinates": [0, 0, 0],
+| | | "part0": "Torso",
+| | | "part1": "LeftArm"
+| | }
+| }
+
+6.6 Rig
+Description: A Humanoid-style controller that drives a model built from parts connected by RigJoints. Manages health, movement, and state. Animations are not supported in this version.
+
+Properties:
+
+Property	Type	Description
+Health	number	Current health
+MaxHealth	number	Maximum health
+WalkSpeed	number	Movement speed
+JumpPower	number	Jump strength
+State	str	Current state ("Idle", "Walking", "Jumping", "Falling")
+RootPart	str	Name of the root part
+HeadPart	str	Name of the head part
+TorsoPart	str	Name of the torso part
+Example:
+
+| {
+| | "instID": "Rig",
+| | "name": "PlayerRig",
+| | "parent": "workspace.Player1",
+| | "properties": {
+| | | "Health": 100,
+| | | "MaxHealth": 100,
+| | | "WalkSpeed": 16,
+| | | "JumpPower": 50,
+| | | "State": "Idle",
+| | | "RootPart": "HumanoidRootPart",
+| | | "HeadPart": "Head",
+| | | "TorsoPart": "Torso"
+| | }
+| }
+
+Note: Rig properties are PascalCase because they are subproperties — see §14.
+
+6.7 Attachment
+Description: A transform anchor point that can be used by RigJoint, PointLight, or other transform-driven instances.
+
+Properties:
+
+Property	Type	Description
+coordinates	vec3	The attachment position relative to its parent
+Example:
+
+| {
+| | "instID": "Attachment",
+| | "name": "MuzzlePoint",
+| | "parent": "workspace.Pistol",
+| | "properties": {
+| | | "coordinates": [0, 0, -1.5]
+| | }
+| }
+
+6.8 Camera
+Description: A camera instance. The default camera is configured by the top-level camera section, but Camera instances may exist in the tree for scriptable cameras.
+
+Properties: (reserved for future runtime API)
+
+6.9 Folder
+Description: A pure grouping container. Has no behavior of its own. Useful for organizing instances under a common parent.
+
+Properties: (none)
+
+7. Networking & Backend Code Instances
+7.1 RemoteEvent
+Description: A networking object that allows secure communication and data transfer between the server and clients.
+
+Properties: (none — configured by name and parent)
+
+Methods (runtime, in LMLua):
+
+event:Connect(fn) — subscribe to incoming events
+
+event:FireServer(...) — client to server
+
+event:FireClient(player, ...) — server to one client
+
+event:Fire(...) — local fire
+
+Example:
+
+| {
+| | "instID": "RemoteEvent",
+| | "name": "DamageEvent",
+| | "parent": "replicated"
+| }
+
+7.2 BindableEvent
+Description: An internal-only signal. Like RemoteEvent but never crosses the network — used for server-internal or client-internal signaling.
+
+Properties: (none)
+
+Methods (runtime, in LMLua):
+
+event:Connect(fn)
+
+event:Fire(...)
+
+Example:
+
+| {
+| | "instID": "BindableEvent",
+| | "name": "RoundStarted",
+| | "parent": "server.storage"
+| }
+
+7.3 Script
+Description: A backend server script that executes game logic, rules, and data management securely on the server.
+
+Properties:
+
+Property	Type	Description
+sourceCode	str	The executable LMLua source code
+Note: sourceCode is a multiline string — newlines must be encoded as \n inside the JSON string.
+
+Placement: Script may be placed anywhere in the tree. Execution context is determined by the class, not the location. Scripts run in tree order (see §15).
+
+Example:
+
+| {
+| | "instID": "Script",
+| | "name": "GameLoop",
+| | "parent": "server.scripts",
+| | "properties": {
+| | | "sourceCode": "server function onStart()\n output("Server started")\nend"
+| | }
+| }
+
+8. User Interface (UI) Instances
+8.1 ScreenGui
+Description: The root container for 2D user interface elements rendered on the player's screen.
+
+Properties: (none required)
+
+Example:
+
+| {
+| | "instID": "ScreenGui",
+| | "name": "MainGui",
+| | "parent": "interface"
+| }
+
+8.2 Frame
+Description: A 2D rectangular container used to group, align, and style UI elements.
+
+Properties:
+
+Property	Type	Description
+position	dims	2D screen coordinates [X, Y]
+size	dims	Pixel dimensions [Width, Height]
+color	color	RGB background color
+Example:
+
+| {
+| | "instID": "Frame",
+| | "name": "HudPanel",
+| | "parent": "interface.MainGui",
+| | "properties": {
+| | | "position": [10, 10],
+| | | "size": [200, 100],
+| | | "color": [30, 30, 30]
+| | }
+| }
+
+8.3 ScrollFrame
+Description: A Frame variant that allows scrolling its contents.
+
+Properties: (all Frame properties, plus)
+
+Property	Type	Description
+canvasSize	dims	Total scrollable area size
+Example:
+
+| {
+| | "instID": "ScrollFrame",
+| | "name": "InventoryList",
+| | "parent": "interface.MainGui",
+| | "properties": {
+| | | "position": [10, 120],
+| | | "size": [200, 300],
+| | | "color": [20, 20, 20],
+| | | "canvasSize": [200, 800]
+| | }
+| }
+
+8.4 TextLabel
+Description: A UI component used to display static or dynamic text on screen.
+
+Properties:
+
+Property	Type	Description
+position	dims	2D coordinates
+size	dims	Dimensions
+text	str	The text message displayed
+color	color	Text color
+Example:
+
+| {
+| | "instID": "TextLabel",
+| | "name": "ScoreLabel",
+| | "parent": "interface.MainGui.HudPanel",
+| | "properties": {
+| | | "position": [10, 10],
+| | | "size": [180, 30],
+| | | "text": "Score: 0",
+| | | "color": [255, 255, 255]
+| | }
+| }
+
+8.5 TextButton
+Description: A clickable button UI element that players can interact with.
+
+Properties:
+
+Property	Type	Description
+position	dims	2D coordinates
+size	dims	Dimensions
+text	str	The button label
+color	color	Background color
+Signals (runtime):
+
+button.Click:Connect(fn) — fires when clicked
+
+Example:
+
+| {
+| | "instID": "TextButton",
+| | "name": "StartButton",
+| | "parent": "interface.MainGui",
+| | "properties": {
+| | | "position": [200, 200],
+| | | "size": [200, 60],
+| | | "text": "Start Game",
+| | | "color": [0, 120, 215]
+| | }
+| }
+
+8.6 ImageLabel
+Description: A UI component that displays an image.
+
+Properties:
+
+Property	Type	Description
+position	dims	2D coordinates
+size	dims	Dimensions
+imageId	str	Asset path or URL
+imageColor	color	Tint applied to the image
+Example:
+
+| {
+| | "instID": "ImageLabel",
+| | "name": "Logo",
+| | "parent": "interface.MainGui",
+| | "properties": {
+| | | "position": [20, 20],
+| | | "size": [128, 128],
+| | | "imageId": "assets://logos/lime.png",
+| | | "imageColor": [255, 255, 255]
+| | }
+| }
+
+8.7 ImageButton
+Description: A clickable UI element displaying an image.
+
+Properties:
+
+Property	Type	Description
+position	dims	2D coordinates
+size	dims	Dimensions
+imageId	str	Asset path or URL
+imageColor	color	Tint applied to the image
+Signals (runtime):
+
+button.Click:Connect(fn)
+
+Example:
+
+| {
+| | "instID": "ImageButton",
+| | "name": "SettingsButton",
+| | "parent": "interface.MainGui",
+| | "properties": {
+| | | "position": [900, 20],
+| | | "size": [48, 48],
+| | | "imageId": "assets://icons/settings.png",
+| | | "imageColor": [255, 255, 255]
+| | }
+| }
+
+8.8 TextBox
+Description: A text input field. Players can type into it.
+
+Properties:
+
+Property	Type	Description
+position	dims	2D coordinates
+size	dims	Dimensions
+text	str	Current input text
+placeholderText	str	Shown when empty
+color	color	Background color
+Signals (runtime):
+
+box.FocusLost:Connect(fn) — fires when input focus is lost
+
+Example:
+
+| {
+| | "instID": "TextBox",
+| | "name": "ChatInput",
+| | "parent": "interface.MainGui",
+| | "properties": {
+| | | "position": [10, 600],
+| | | "size": [400, 30],
+| | | "text": "",
+| | | "placeholderText": "Type a message...",
+| | | "color": [40, 40, 40]
+| | }
+| }
+
+9. Client-Side Code Instances
+9.1 LocalScript
+Description: A client-side script that runs locally on the player's device to handle UI interactions and user inputs.
+
+Properties:
+
+Property	Type	Description
+sourceCode	str	The executable LMLua source code
+Placement: LocalScript may be placed anywhere in the tree, same as Script. Execution context is determined by the class.
+
+Example:
+
+| {
+| | "instID": "LocalScript",
+| | "name": "HudController",
+| | "parent": "starter.player",
+| | "properties": {
+| | | "sourceCode": "client function onStart()\n output("Client ready")\nend"
+| | }
+| }
+
+10. Player / Character / Team Instances
+10.1 Player
+Description: A player object representing a connected user.
+
+Properties:
+
+Property	Type	Description
+userId	str	Unique user identifier
+displayName	str	Display name
+team	str	Team name, if any
+Runtime (LMLua):
+
+player.Character — the player's character instance
+
+player:LoadData() / player:SaveData() — Supabase-backed (design-only)
+
+Example:
+
+| {
+| | "instID": "Player",
+| | "name": "Player1",
+| | "parent": "starter.player",
+| | "properties": {
+| | | "userId": "0",
+| | | "displayName": "Guest",
+| | | "team": "Neutral"
+| | }
+| }
+
+10.2 Character
+Description: A player's or NPC's body. Contains parts joined by RigJoints and a Rig controller.
+
+Properties: (none required — structure is defined by children)
+
+Example:
+
+| {
+| | "instID": "Character",
+| | "name": "PlayerCharacter",
+| | "parent": "starter.character"
+| }
+
+10.3 Team
+Description: A team assignment container. Players may belong to a team.
+
+Properties:
+
+Property	Type	Description
+color	color	Team color
+autoAssign	boolean	Whether new players are auto-assigned
+Example:
+
+| {
+| | "instID": "Team",
+| | "name": "Red",
+| | "parent": "server.storage",
+| | "properties": {
+| | | "color": [255, 0, 0],
+| | | "autoAssign": false
+| | }
+| }
+
+11. Items & Audio Instances
+11.1 Gear
+Description: An item that can be held by a character — a sword, gun, tool, or any equippable object.
+
+Properties:
+
+Property	Type	Description
+canBeDropped	boolean	Whether the gear can be dropped
+requiresHold	boolean	Whether the character must hold it to use it
+Example:
+
+| {
+| | "instID": "Gear",
+| | "name": "Sword",
+| | "parent": "starter.gears",
+| | "properties": {
+| | | "canBeDropped": true,
+| | | "requiresHold": true
+| | }
+| }
+
+11.2 Sound
+Description: An audio source that can be parented to a part, model, or UI element.
+
+Properties:
+
+Property	Type	Description
+soundId	str	Asset path or URL
+volume	number	Playback volume (0.0–1.0)
+pitch	number	Playback pitch multiplier
+loop	boolean	Whether the sound loops
+playing	boolean	Whether the sound is currently playing
+range	number	Audible distance (when is3D is true)
+is3D	boolean	Whether the sound is positional
+Example:
+
+| {
+| | "instID": "Sound",
+| | "name": "Footstep",
+| | "parent": "workspace.Player1.LeftFoot",
+| | "properties": {
+| | | "soundId": "assets://sounds/step_grass.ogg",
+| | | "volume": 0.6,
+| | | "pitch": 1.0,
+| | | "loop": false,
+| | | "playing": false,
+| | | "range": 20,
+| | | "is3D": true
+| | }
+| }
+
+12. Property Types
+LiMe World defines a small set of JSON-encodable types. Every type is represented as a JSON array or a plain scalar.
+
+12.1 Scalars
+Type	JSON form	Example
+str	JSON string	"Concrete"
+int	JSON integer	42
+number	JSON number	3.14
+boolean	JSON bool	true
+null	JSON null	null
+12.2 Composites
+Type	JSON form	Example
+vec3	three numbers [X, Y, Z]	[10, 5, -3]
+dims	two numbers [Width, Height]	[200, 100]
+color	three integers [R, G, B] (0–255)	[255, 128, 0]
+12.3 Property Name Resolution
+Property names are generic wherever possible. The loader resolves meaning from instID.
+
+Example — size is vec3 on Part, dims on Frame:
+
+instID	Property	Resolved type
+Part	size	vec3
+Frame	size	dims
+Part	coordinates	vec3
+Frame	position	dims
+Class-specific properties (surfaceMaterial on Part, soundId on Sound) keep their unique names because there is nothing to collide with.
+
+12.4 Position vs. Coordinates
+3D instances use coordinates (vec3)
+
+UI instances use position (dims)
+
+size is used by both (vec3 for 3D, dims for UI)
+
+No instance has both coordinates and position.
+
+13. Parenting & Hierarchy
+LiMe World uses dotted paths for parenting. Every instance declares its parent as a dot-separated path, where the first segment is a top-level container and each further segment names a nested instance.
+
+13.1 Top-Level Containers
+The following top-level containers are implicit — they always exist and are never declared in the instances array:
+
+Container	Purpose
+workspace	The 3D scene container
+replicated	Replicated storage
+server	Server container
+interface	UI container
+starter	Player template container
+13.2 Sub-Containers
+The following sub-containers also exist implicitly:
+
+Container	Path	Purpose
+Storage	server.storage	Server-side storage
+Scripts	server.scripts	Server scripts
+Character	starter.character	Character template
+Player	starter.player	Player template
+Gears	starter.gears	Gear template
+13.3 Path Examples
+Path	Meaning
+workspace	The 3D scene container
+workspace.House	A Model named House inside the workspace
+workspace.House.Door	A Part named Door inside House
+replicated	The Replicated container
+server	The Server container
+server.storage	Server-side storage
+server.scripts	Server scripts
+interface	The UI container
+interface.MainGui	A ScreenGui named MainGui
+interface.MainGui.HudPanel	A Frame inside MainGui
+starter	The player template container
+starter.character	Character template
+starter.player	Player template
+starter.gears	Gear template
+13.4 Rules
+Every instance's parent must reference an existing container or instance.
+
+Top-level containers (workspace, replicated, server, interface, starter) are implicit and never declared.
+
+A path segment matches an instance's name.
+
+. is the only valid separator.
+
+The first segment is always a top-level container.
+
+14. Naming Conventions
+LiMe World uses two casing styles depending on the level:
+
+14.1 camelCase — Main Properties
+Used for:
+
+Top-level instance fields: instID, name, parent, properties, tags, attributes, id
+
+Main property names inside properties: coordinates, size, position, color, text, brightness, range, anchored, shape, surfaceMaterial, sourceCode, soundId, imageId, imageColor, volume, pitch, loop, playing, is3D, placeholderText, canvasSize, userId, displayName, team, canBeDropped, requiresHold, part0, part1
+
+Top-level container names: workspace, replicated, server, interface, starter
+
+Sub-container names: storage, scripts, character, player, gears
+
+14.2 PascalCase — Subproperties and Values
+Used for:
+
+Nested properties inside properties (e.g. Rig.Health, Rig.MaxHealth, Rig.WalkSpeed, Rig.JumpPower, Rig.State, Rig.RootPart, Rig.HeadPart, Rig.TorsoPart)
+
+Values of enum-like strings: "Box", "Ball", "Cylinder", "Wedge", "Slate", "Concrete", "Voxel", "Fixed", "Idle", "Walking", "Jumping", "Falling"
+
+Content inside attributes, metadata, lighting, environment, camera, spawn, physics, assets
+
+14.3 Class Names
+Class names (instID values) are PascalCase:
+
+Part, SpawnLocation, Model, PointLight, RigJoint, Rig, Attachment, Camera, Folder, RemoteEvent, BindableEvent, Script, ScreenGui, Frame, ScrollFrame, TextLabel, TextButton, ImageLabel, ImageButton, TextBox, LocalScript, Player, Character, Team, Gear, Sound
+
+14.4 Why the Split?
+Top-level and main properties are written frequently by hand, so camelCase keeps .lw files compact and readable. Subproperties and enum values are less frequent, and PascalCase matches the convention used by the LMLua runtime and by Roblox's Enum system.
+
+15. Scripts & LMLua Integration
+Scripts are instances with instID: "Script" (server) or instID: "LocalScript" (client). Their LMLua source lives in sourceCode as a JSON string with embedded \n newlines.
+
+15.1 Placement
+Script and LocalScript may be placed anywhere in the tree. There are no forbidden paths.
+
+The class determines execution context, not the location:
+
+Class	Runs on
+Script	Server
+LocalScript	Client
+15.2 Execution Order
+Scripts execute in tree order:
+
+Parents before children
+
+Siblings in array order
+
+Across the entire instances array, depth-first
+
+This is deterministic and matches how most engines load scenes.
+
+15.3 Accessing Instances from LMLua
+Scripts access instances through the game global using dotted paths:
+
+| local floor = workspace.Floor
+| local lamp = workspace.House.WallLamp
+|
+| floor.color = [255, 0, 0]
+| lamp.brightness = 5
+
+15.4 Signals
+All event-bearing instances expose the same signal API:
+
+Method	Meaning
+:Connect(fn)	Subscribe to the event
+:Fire(...)	Local fire
+:FireServer(...)	Client to server (RemoteEvent only)
+:FireClient(player, ...)	Server to one client (RemoteEvent only)
+TextButton, ImageButton, and TextBox expose .Click and .FocusLost signals with the same :Connect method.
+
+16. World Metadata
+The metadata object describes the world itself. It is not part of the runtime scene graph, but is exposed to scripts via the game global.
+
+Field	Type	Description
+Name	string	World display name
+Author	string	Author name
+Description	string	Long description
+Created	string	ISO 8601 timestamp
+Modified	string	ISO 8601 timestamp
+Tags	array	Keywords
+Thumbnail	string	Path or URL to a preview image
+Note: metadata uses PascalCase because it is a nested object — see §14.
+
+Example:
+
+| {
+| | "format": "lime-world",
+| | "version": "1.1",
+| | "metadata": {
+| | | "Name": "My First World",
+| | | "Author": "Player1",
+| | | "Description": "A small test world.",
+| | | "Created": "2026-01-01T00:00:00Z",
+| | | "Modified": "2026-01-01T00:00:00Z",
+| | | "Tags": ["test", "sandbox"],
+| | | "Thumbnail": "assets://thumbnails/world01.png"
+| | },
+| | "instances": []
+| }
+
+17. Lighting & Environment
+17.1 Lighting
+Field	Type	Description
+Ambient	color	Indoor ambient light
+OutdoorAmbient	color	Outdoor ambient light
+Brightness	number	Sun brightness
+ClockTime	number	Time of day (0–24)
+GeographicLatitude	number	Latitude in degrees
+GlobalShadows	boolean	Whether shadows are enabled
+Technology	string	"Voxel", "ShadowMap", or "Future"
+ExposureCompensation	number	HDR exposure
+Example:
+
+| "lighting": {
+| | "Ambient": [70, 70, 70],
+| | "OutdoorAmbient": [128, 128, 128],
+| | "Brightness": 2,
+| | "ClockTime": 14,
+| | "GeographicLatitude": 41.7,
+| | "GlobalShadows": true,
+| | "Technology": "ShadowMap",
+| | "ExposureCompensation": 0
+| }
+
+17.2 Environment
+Field	Type	Description
+FogColor	color	Fog color
+FogStart	number	Fog start distance
+FogEnd	number	Fog end distance
+Skybox	object	SkyboxUp, SkyboxDown, SkyboxLeft, SkyboxRight, SkyboxFront, SkyboxBack
+Atmosphere	object	Density, Offset, Color, Decay, Glare, Haze
+Example:
+
+| "environment": {
+| | "FogColor": [200, 200, 220],
+| | "FogStart": 100,
+| | "FogEnd": 800,
+| | "Skybox": {
+| | | "SkyboxUp": "assets://sky/up.png",
+| | | "SkyboxDown": "assets://sky/down.png",
+| | | "SkyboxLeft": "assets://sky/left.png",
+| | | "SkyboxRight": "assets://sky/right.png",
+| | | "SkyboxFront": "assets://sky/front.png",
+| | | "SkyboxBack": "assets://sky/back.png"
+| | },
+| | "Atmosphere": {
+| | | "Density": 0.3,
+| | | "Offset": 0.0,
+| | | "Color": [200, 220, 255],
+| | | "Decay": [100, 100, 120],
+| | | "Glare": 0.2,
+| | | "Haze": 1.0
+| | }
+| }
+
+18. Camera & Spawn
+18.1 Camera
+Default camera configuration for new players.
+
+Field	Type	Description
+Position	vec3	Initial camera position
+LookAt	vec3	Initial look target
+FieldOfView	number	FOV in degrees
+Type	string	"Fixed", "Attach", "Watch", "Track", "Custom", or "Scriptable"
+Example:
+
+| "camera": {
+| | "Position": [0, 20, 40],
+| | "LookAt": [0, 0, 0],
+| | "FieldOfView": 70,
+| | "Type": "Scriptable"
+| }
+
+18.2 Spawn
+Default spawn point, used if no SpawnLocation instance exists.
+
+Field	Type	Description
+Position	vec3	Spawn position
+Rotation	vec3	Spawn rotation
+Example:
+
+| "spawn": {
+| | "Position": [0, 5, 0],
+| | "Rotation": [0, 0, 0]
+| }
+
+19. Physics
+Global physics settings.
+
+Field	Type	Description
+Gravity	vec3	Global gravity vector
+EnablePGS	boolean	Enable Projected Gauss-Seidel solver
+SolverIterations	number	Solver iteration count
+AllowSleep	boolean	Allow rigid bodies to sleep
+PhysicsSteppingMethod	string	"Fixed" or "Adaptive"
+StreamingEnabled	boolean	Enable dynamic content streaming
+StreamingRadius	number	Streaming radius in studs
+Example:
+
+| "physics": {
+| | "Gravity": [0, -196.2, 0],
+| | "EnablePGS": true,
+| | "SolverIterations": 8,
+| | "AllowSleep": true,
+| | "PhysicsSteppingMethod": "Fixed",
+| | "StreamingEnabled": false,
+| | "StreamingRadius": 512
+| }
+
+20. Materials
+Materials are referenced through the surfaceMaterial property. LiMe World defines the following built-in values:
+
+Plastic, SmoothPlastic, Wood, WoodPlanks, Concrete, Brick, Cobblestone, Metal, DiamondPlate, CorrodedMetal, Glass, ForceField, Neon, Ice, Sand, Fabric, Grass, Marble, Granite, Slate
+
+21. Schema Reference
+A JSON Schema for validating .lw files should enforce:
+
+The root object requires format, version, and instances
+
+format must equal "lime-world"
+
+version must match the pattern ^\d+\.\d+$
+
+instances is an array of instance objects
+
+Each instance object requires an instID string
+
+Each instance may contain name, id, parent, properties, tags, attributes
+
+parent is a dotted path string starting with a top-level container name
+
+vec3 is an array of exactly three numbers
+
+dims is an array of exactly two numbers
+
+color is an array of exactly three integers between 0 and 255
+
+Optional top-level objects (metadata, lighting, environment, camera, spawn, physics, assets) are plain objects
+
+Applications may extend the schema with custom instance classes and property types.
+
+22. Reserved Field Names
+The following top-level field names are reserved and must not be used for custom data:
+
+format, version, metadata, instances, lighting, environment, camera, spawn, physics, assets
+
+The following instance-level field names are reserved:
+
+instID, name, id, parent, properties, tags, attributes
+
+The following container names are reserved and always exist:
+
+workspace, replicated, server, interface, starter, server.storage, server.scripts, starter.character, starter.player, starter.gears
+
+Custom data should live in attributes (per-instance) or in an application-specific top-level field prefixed with x- (e.g. x-myapp).
+
+23. Differences from Roblox .rbxlx
+Feature	Roblox .rbxlx	LiMe World .lw
+Encoding	XML	JSON
+Readability	Moderate	High
+Diff-friendliness	Poor	Excellent
+Script language	Luau	LMLua
+Type encoding	Custom XML tags	JSON arrays and objects
+Parenting	<Item> nesting	Dotted parent paths
+Property storage	<Properties> block	properties object
+Class identifier	<Item class="...">	instID field
+Property naming	PascalCase	camelCase (main), PascalCase (sub)
+Generic property names	No	Yes — resolved by instID
+Top-level containers	Services	Implicit containers (workspace, server, etc.)
+Binary variant	.rbxl	(planned: .lwb)
+Schema	Proprietary	Open JSON Schema
+Versioning	Roblox-managed	Semver string in-file
+24. Roadmap
+v1.0 — Base Format
+JSON root object with format and version — done
+
+Eleven instance classes — done
+
+String-path parenting — done
+
+Lighting, camera, spawn, physics, environment — done
+
+Inline LMLua scripts via sourceCode — done
+
+v1.1 — Expanded Classes & Generic Properties
+All 26 instance classes — done
+
+Generic property names resolved by instID — done
+
+RigJoint, Rig, Sound, Gear — done
+
+Player, Character, Team — done
+
+ImageLabel, ImageButton, TextBox — done
+
+ScrollFrame (renamed from ScrollingFrame) — done
+
+BindableEvent, Attachment, Camera, Folder — done
+
+Service path reorganization — done
+
+Dotted path syntax — done
+
+Implicit top-level containers — done
+
+camelCase/PascalCase split — done
+
+Signals (:Connect, :Fire, :FireServer, :FireClient) — done
+
+v1.2 — Quality of Life
+Asset registry with URI-based references
+
+Prefab references
+
+Terrain data blocks
+
+v1.3 — Advanced Scenes
+Joints and constraints beyond RigJoint (welds, hinges, motors)
+
+Particle emitters and trail effects
+
+Sound groups and mixers
+
+v1.4 — Runtime Integration
+Real server and client semantics with network registration
+
+Built-in RPC stubs for cross-side calls
+
+Full Inst hierarchy runtime
+
+Full Vec3 and Vec2 math library
+
+v2.0 — Binary Format
+.lwb binary counterpart to .lw
+
+Compression (zstd)
+
+Zero-copy asset loading
+
+25. Appendices
+Appendix A — Instance Class Quick Reference
+3D Physical & Environmental
+
+Part — coordinates, size, color, surfaceMaterial, anchored, shape
+
+SpawnLocation — coordinates, size, color, anchored, shape
+
+Model — (container)
+
+PointLight — brightness, range, color
+
+RigJoint — coordinates, part0, part1
+
+Rig — Health, MaxHealth, WalkSpeed, JumpPower, State, RootPart, HeadPart, TorsoPart
+
+Attachment — coordinates
+
+Camera — (reserved)
+
+Folder — (container)
+
+Networking & Backend Code
+
+RemoteEvent — (no properties)
+
+BindableEvent — (no properties)
+
+Script — sourceCode
+
+User Interface
+
+ScreenGui — (no properties)
+
+Frame — position, size, color
+
+ScrollFrame — position, size, color, canvasSize
+
+TextLabel — position, size, text, color
+
+TextButton — position, size, text, color
+
+ImageLabel — position, size, imageId, imageColor
+
+ImageButton — position, size, imageId, imageColor
+
+TextBox — position, size, text, placeholderText, color
+
+Client-Side Code
+
+LocalScript — sourceCode
+
+Player / Character / Team
+
+Player — userId, displayName, team
+
+Character — (container)
+
+Team — color, autoAssign
+
+Items
+
+Gear — canBeDropped, requiresHold
+
+Audio
+
+Sound — soundId, volume, pitch, loop, playing, range, is3D
+
+Appendix B — Property Type Cheat Sheet
+Type	JSON form
+str	JSON string
+int	JSON integer
+number	JSON number
+boolean	JSON bool
+null	JSON null
+vec3	[X, Y, Z]
+dims	[Width, Height]
+color	[R, G, B] (0–255)
+Appendix C — Common Parent Paths
+Path	Meaning
+workspace	3D scene
+workspace.House	Model inside workspace
+workspace.House.Door	Part inside a model
+replicated	Replicated storage
+server	Server container
+server.storage	Server-side storage
+server.scripts	Server scripts
+interface	UI container
+interface.MainGui	ScreenGui
+starter	Player template container
+starter.character	Character template
+starter.player	Player template
+starter.gears	Gear template
+Appendix D — Material Reference
+Plastic, SmoothPlastic, Wood, WoodPlanks, Concrete, Brick, Cobblestone, Metal, DiamondPlate, CorrodedMetal, Glass, ForceField, Neon, Ice, Sand, Fabric, Grass, Marble, Granite, Slate
+
+Appendix E — Signal Reference
+Signal	Instance	Meaning
+.Click	TextButton, ImageButton	Fires on click
+.FocusLost	TextBox	Fires when input focus is lost
+.OnServerEvent	RemoteEvent	Fires on server when client fires
+.OnClientEvent	RemoteEvent	Fires on client when server fires
+
+End of LiMe World v1.1 Documentation
